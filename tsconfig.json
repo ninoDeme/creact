@@ -23,7 +23,8 @@
     "skipLibCheck": true,
     "baseUrl": "./",
     "jsxFactory": "criarNodo",
-    "jsx": "react"
+    "jsx": "react",
+    "noImplicitAny": false
   },
   "include": ["src"]
 }

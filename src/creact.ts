@@ -64,7 +64,6 @@ export function criarNodo<Props extends PropsT<ChildrenT>>(
   ...children: Props["children"]
 ): Nodo<Props>;
 
-
 export function criarNodo<Props extends PropsT>(
   tag: string | ComponentFn<Props>,
   props: Omit<Props, "children"> | null,
@@ -104,6 +103,11 @@ export function useSignal<T>(
   ];
 }
 
+export function useStado() {
+  let state = currentComponent
+  return () => state;;
+}
+
 export function renderizar<Props extends PropsT>(
   comp: Nodo<Props>,
   state?: NodoEstado,
@@ -133,7 +137,7 @@ export function renderizar<Props extends PropsT>(
 
   if (comp.props != null) {
     for (let [name, value] of Object.entries(comp.props)) {
-      if (name === 'children') {
+      if (name === "children") {
         continue;
       }
       if (typeof value === "function") {

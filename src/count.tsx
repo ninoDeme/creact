@@ -1,11 +1,13 @@
-import { type ComponentFn, useSignal, criarNodo } from "./creact";
+import { type ComponentFn, useSignal, criarNodo, useStado } from "./creact";
 
 export const CounterJSX: ComponentFn<{ initialCount: number }> = (props) => {
   let [count, setCount] = useSignal<number>(props.initialCount);
+  let getStado = useStado();
+  console.log(getStado());
   return (
     <div class="card">
-      <button click={() => setCount(count() + 1)}>
-        value: {count().toString()}
+      <button type="button" click={() => setCount(count() + 1)}>
+        valor: {count().toString()}
       </button>
     </div>
   );
@@ -20,7 +22,7 @@ export const CounterResultado: ComponentFn<{ initialCount: number }> = (
     { class: "card" },
     criarNodo(
       "button",
-      { id: "counter", type: "button", click: () => setCount(count() + 1) },
+      { type: "button", click: () => setCount(count() + 1) },
       "value: ",
       count().toString(),
     ),

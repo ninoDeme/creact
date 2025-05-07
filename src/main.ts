@@ -12,9 +12,7 @@ let app = h(
     { href: "https://vite.dev", target: "_blank" },
     h("img", { src: viteLogo, class: "logo", alt: "Vite logo" }),
   ),
-  h(
-    "a",
-    { href: "https://www.typescriptlang.org/", target: "_blank" },
+  h("a", { href: "https://www.typescriptlang.org/", target: "_blank" },
     h("img", {
       src: typescriptLogo,
       class: "logo vanilla",
@@ -22,6 +20,9 @@ let app = h(
     }),
   ),
   h("h1", null, "Vite + TypeScript"),
+  h(CounterJSX, { initialCount: 2 }),
+  h(CounterJSX, { initialCount: 2 }),
+  h(CounterJSX, { initialCount: 2 }),
   h(CounterJSX, { initialCount: 2 }),
   h(CounterResultado, { initialCount: 4 }),
   h(

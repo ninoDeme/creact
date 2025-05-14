@@ -26,7 +26,8 @@ interface ComponentEstado {
   signals: any[];
   signalIndex: number;
   children: Map<string, ComponentEstado>;
-  component: Nodo<any>;
+  children_list: (ComponentEstado | undefined)[];
+  component: Nodo;
   [ComponentSymbol]: true;
 }
 
@@ -62,7 +63,7 @@ export function criarNodo<Props extends PropsT>(
 
 export function h(
   tag: string,
-  props: Omit<PropsT, "children"> | null,
+  props: Omit<PropsT, "children"> | null | undefined,
   ...children: ChildrenT[]
 ): Nodo<PropsT>;
 export function h<Props extends PropsT<undefined>>(
@@ -81,7 +82,7 @@ export function h<Props extends PropsT<ChildrenT[]>>(
 
 export function h<Props extends PropsT>(
   tag: string | ComponentFn<Props>,
-  props: Omit<Props, "children"> | null,
+  props: Omit<Props, "children"> | null | undefined,
   ...children: ChildrenT[]
 ): Nodo<Props> {
   return criarNodo<Props>(tag, {
@@ -93,9 +94,9 @@ export function h<Props extends PropsT>(
 
 let currentComponent: ComponentEstado | null = null;
 
-export function useSignal<T>(
+export function useState<T>(
   def: T,
-): [getter: () => T, setter: (newValue: T) => T | null] {
+): [getter: T, setter: (newValue: T) => T | null] {
   const state = currentComponent;
   if (!state) {
     throw new Error("Not in component context");
@@ -104,17 +105,65 @@ export function useSignal<T>(
   if (!(i in state.signals)) {
     state.signals[i] = def;
   }
-  let val = state.signals[i];
+  let val = state.signals[i] as T;
   state.signalIndex += 1;
   return [
-    () => val,
+    val,
     (newValue) => {
       let oldValue = state.signals[i];
-      state.signals[i] = newValue;
-      setTimeout(() => renderizar(state.component, undefined, state));
+      if (oldValue !== newValue) {
+        state.signals[i] = newValue;
+        setTimeout(() => renderizar(state.component, undefined, state));
+      }
       return oldValue ?? null;
     },
   ];
+}
+
+const SignalSymbol = Symbol("signal");
+
+export interface Signal<T> {
+  value: T;
+  [SignalSymbol]: true;
+}
+
+interface PrivateSignal<T> extends Signal<T> {
+  _raw: T;
+  _components: Set<ComponentEstado>;
+}
+
+export function useSignal<T>(def: T): Signal<T> {
+  const state = currentComponent;
+  if (!state) {
+    throw new Error("Not in component context");
+  }
+  let i = state.signalIndex;
+  if (!(i in state.signals)) {
+    state.signals[i] = <PrivateSignal<T>>{
+      _raw: def,
+      _components: new Set(),
+      [SignalSymbol]: true,
+      get value() {
+        if (currentComponent && !this._components.has(currentComponent)) {
+          this._components.add(currentComponent);
+        }
+        return this._raw;
+      },
+      set value(newValue: T) {
+        this._raw = newValue;
+        setTimeout(() => {
+          let paraAtualizar = [...this._components];
+          this._components.clear();
+          for (let c of paraAtualizar) {
+            renderizar(c.component, undefined, c);
+          }
+        });
+      },
+    };
+  }
+  let val = state.signals[i];
+  state.signalIndex += 1;
+  return val;
 }
 
 export function unwrapEstado(estado: ComponentEstado): Node[] {
@@ -136,12 +185,13 @@ export function renderizar<Props extends PropsT>(
   if (old_state && !(ComponentSymbol in old_state)) {
     old_state = undefined;
   }
-  let state = <ComponentEstado>{
+  let state: ComponentEstado = {
     signals: [...(old_state?.signals ?? [])],
     signalIndex: 0,
     el: undefined,
-    component: comp,
+    component: comp as Nodo,
     children: new Map(),
+    children_list: [],
     key: old_state?.key ?? key ?? comp.key ?? `${crypto.randomUUID()}`,
     [ComponentSymbol]: true,
   };
@@ -171,7 +221,9 @@ export function renderizar<Props extends PropsT>(
     state.el = [];
   }
 
+  let i = -1;
   for (let val of children) {
+    i++;
     if (isNodo(val)) {
       let key = val.props.key;
       if (!key) {
@@ -180,18 +232,26 @@ export function renderizar<Props extends PropsT>(
         }
         key = `${state.key}:${crypto.randomUUID()}`;
       }
-      let old_estado = old_state?.children.get(key);
+      let old_estado = val.props.key
+        ? old_state?.children.get(key)
+        : old_state?.children_list[i];
       let pai = parent;
       if (!Array.isArray(state.el)) {
         pai = state.el;
       }
-      let new_estado = renderizar(val, pai, old_estado, key);
+      let new_estado: ComponentEstado;
+      if (old_estado && !diffNodos(old_estado.component, val)) {
+        new_estado = old_estado;
+      } else {
+        new_estado = renderizar(val, pai, old_estado, key);
+      }
       state.children.set(key, new_estado);
       if (Array.isArray(state.el)) {
         state.el.push(...unwrapEstado(new_estado));
       } else {
         state.el.append(...unwrapEstado(new_estado));
       }
+      state.children_list.push(new_estado);
     } else {
       let str: string;
       if (val == null) {
@@ -211,6 +271,7 @@ export function renderizar<Props extends PropsT>(
       } else {
         state.el.append(document.createTextNode(str));
       }
+      state.children_list.push(undefined);
     }
   }
 
@@ -244,4 +305,37 @@ export function renderizar<Props extends PropsT>(
   }
 
   return state;
+}
+
+function diffNodos(a: Nodo, b: Nodo): boolean {
+  for (let prop of new Set([
+    ...Object.keys(b.props),
+    ...Object.keys(a.props),
+  ])) {
+    if (a.tag !== b.tag) {
+      return false;
+    }
+    if (prop === "children") {
+      let a_children = a.props.children;
+      let b_children = b.props.children;
+      if (a_children?.length !== b_children?.length) {
+        return true;
+      }
+      for (let i in a_children) {
+        if (
+          isNodo(a_children[i]) &&
+          isNodo(b_children?.[i]) &&
+          diffNodos(a_children[i], b_children[i])
+        ) {
+          return true;
+        }
+        if (a_children[i] != b_children?.[i]) {
+          return true;
+        }
+      }
+    } else if (a.props[prop] !== b.props[prop]) {
+      return true;
+    }
+  }
+  return false;
 }

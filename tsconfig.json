@@ -22,8 +22,8 @@
     "noUncheckedSideEffectImports": true,
     "skipLibCheck": true,
     "baseUrl": "./",
-    "jsxFactory": "criarNodo",
-    "jsx": "react",
+    "jsx": "react-jsx",
+    "jsxImportSource": "./creact",
     "noImplicitAny": false
   },
   "include": ["src"]
